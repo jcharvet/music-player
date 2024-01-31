@@ -20,8 +20,9 @@ class AudioPlayer:
         self.select_folder_btn = tk.Button(root, text="Select Folder", command=self.select_folder)
         self.select_folder_btn.pack()
 
-        self.audio_listbox = tk.Listbox(root, width=50, height=20)  # Increased size
+        self.audio_listbox = tk.Listbox(root, width=50, height=20)
         self.audio_listbox.pack()
+        self.audio_listbox.bind('<Double-1>', self.on_double_click)  # Bind double-click event
 
         self.play_btn = tk.Button(root, text="Play", command=self.play_audio)
         self.play_btn.pack()
@@ -30,13 +31,11 @@ class AudioPlayer:
         self.stop_btn.pack()
 
         self.volume_scale = tk.Scale(root, from_=0, to=100, orient=tk.HORIZONTAL, command=self.adjust_volume)
-        self.volume_scale.set(100)  # Default volume
+        self.volume_scale.set(100)
         self.volume_scale.pack()
 
-        # Current playing audio
         self.current_audio = None
 
-        # Load saved folders
         self.load_saved_folders()
 
     def select_folder(self):
@@ -51,6 +50,9 @@ class AudioPlayer:
         for file in os.listdir(folder_path):
             if file.endswith('.mp3') or file.endswith('.wav'):
                 self.audio_listbox.insert(tk.END, file)
+
+    def on_double_click(self, event):
+        self.play_audio()
 
     def play_audio(self):
         if self.audio_listbox.curselection():
@@ -80,7 +82,7 @@ class AudioPlayer:
             with open(self.settings_file, "r") as file:
                 folders = file.readlines()
                 if folders:
-                    last_folder = folders[-1].strip()  # Load the last saved folder
+                    last_folder = folders[-1].strip()
                     self.folder_label.config(text=last_folder)
                     self.load_audio_files(last_folder)
 
