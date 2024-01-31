@@ -1,7 +1,9 @@
 import os
 import tkinter as tk
-from tkinter import filedialog
+from tkinter import filedialog, messagebox, ttk
 import pygame
+from mutagen.mp3 import MP3
+from mutagen.easyid3 import EasyID3
 
 class AudioPlayer:
     def __init__(self, root):
@@ -13,20 +15,31 @@ class AudioPlayer:
         pygame.init()
         pygame.mixer.init()
 
-        # GUI Elements
-        self.folder_label = tk.Label(root, text="No folder selected")
+        # GUI Elements setup
+        self.setup_labels()
+        self.setup_treeview()
+        self.setup_controls()
+        self.load_saved_folders()
+
+    def setup_labels(self):
+        self.folder_label = tk.Label(self.root, text="No folder selected")
         self.folder_label.pack()
 
-        self.select_folder_btn = tk.Button(root, text="Select Folder", command=self.select_folder)
-        self.select_folder_btn.pack()
+    def setup_treeview(self):
+        columns = ('Filename', 'Title', 'Artist', 'Album', 'Length', 'Sample Rate', 'Bit Depth', 'Bitrate', 'File Type')
+        self.audio_treeview = ttk.Treeview(self.root, columns=columns, show='headings')
+        for col in columns:
+            self.audio_treeview.heading(col, text=col)
+            self.audio_treeview.column(col, width=100)
+        self.audio_treeview.pack(expand=True, fill='both')
+        self.audio_treeview.bind('<Double-1>', self.on_double_click_treeview)
 
-        self.audio_listbox = tk.Listbox(root, width=50, height=20)
-        self.audio_listbox.pack()
-        self.audio_listbox.bind('<Double-1>', self.on_double_click)
-
-        # Playback control frame
-        control_frame = tk.Frame(root)
+    def setup_controls(self):
+        control_frame = tk.Frame(self.root)
         control_frame.pack()
+
+        self.prev_btn = tk.Button(control_frame, text="Previous", command=self.play_previous)
+        self.prev_btn.pack(side=tk.LEFT)
 
         self.play_btn = tk.Button(control_frame, text="Play", command=self.play_audio)
         self.play_btn.pack(side=tk.LEFT)
@@ -37,15 +50,9 @@ class AudioPlayer:
         self.next_btn = tk.Button(control_frame, text="Next", command=self.play_next)
         self.next_btn.pack(side=tk.LEFT)
 
-        self.volume_scale = tk.Scale(root, from_=0, to=100, orient=tk.HORIZONTAL, command=self.adjust_volume)
-        self.volume_scale.set(20)  # Set default volume to 20%
-        self.volume_scale.pack()
-
-        self.current_audio = None
-        self.is_playing_sequence = False
-
-        self.load_saved_folders()
-        self.check_for_music_end()
+        self.volume_scale = tk.Scale(self.root, from_=0, to=100, orient=tk.HORIZONTAL, command=self.adjust_volume)
+        self.volume_scale.set(20)
+        self.volume_scale.pack()    
 
     def select_folder(self):
         folder_path = filedialog.askdirectory(initialdir=os.path.expanduser("~/Desktop"))
@@ -55,46 +62,71 @@ class AudioPlayer:
             self.load_audio_files(folder_path)
 
     def load_audio_files(self, folder_path):
-        self.audio_listbox.delete(0, tk.END)
+        self.audio_treeview.delete(*self.audio_treeview.get_children())
         for file in os.listdir(folder_path):
-            if file.endswith('.mp3') or file.endswith('.wav'):
-                self.audio_listbox.insert(tk.END, file)
+            if file.lower().endswith('.mp3'):
+                file_path = os.path.join(folder_path, file)
+                audio_metadata = self.get_audio_metadata(file_path)
+                self.audio_treeview.insert('', 'end', values=audio_metadata)
 
-    def on_double_click(self, event):
-        self.is_playing_sequence = True
+    def get_audio_metadata(self, file_path):
+        try:
+            audio = MP3(file_path, ID3=EasyID3)
+            title = audio.get('title', [''])[0]
+            artist = audio.get('artist', [''])[0]
+            album = audio.get('album', [''])[0]
+            length = str(int(audio.info.length))  # or format as needed
+            sample_rate = audio.info.sample_rate
+            bitrate = audio.info.bitrate // 1000  # in kbps
+            file_type = 'MP3'
+            bit_depth = 'N/A'  # MP3 files do not have bit depth
+            return (os.path.basename(file_path), title, artist, album, length, sample_rate, bit_depth, bitrate, file_type)
+        except Exception as e:
+            messagebox.showerror("Error", f"Cannot read metadata from {file_path}.\nError: {str(e)}")
+            return (os.path.basename(file_path), '', '', '', '', '', '', '', '')
+
+    def on_double_click_treeview(self, event):
+        # Get the item that was double-clicked
+        selected_item = self.audio_treeview.selection()[0]
+        # Set the current audio index to the index of the selected item
+        self.current_audio_index = self.audio_treeview.index(selected_item)
+        # Play the selected audio
         self.play_audio()
 
     def play_audio(self):
-        if self.audio_listbox.curselection():
-            selected_index = self.audio_listbox.curselection()[0]
-            self.play_selected_audio(selected_index)
-
-    def play_selected_audio(self, index):
-        selected_file = self.audio_listbox.get(index)
-        folder = self.folder_label.cget("text")
-        file_path = os.path.join(folder, selected_file)
-
-        if self.current_audio != file_path:
-            self.current_audio = file_path
+        if self.current_audio_index is not None:
+            # Get the item to play based on the current index
+            item_to_play = self.audio_treeview.get_children()[self.current_audio_index]
+            # Extract the filename from the item values
+            filename = self.audio_treeview.item(item_to_play, 'values')[0]
+            folder = self.folder_label.cget("text")
+            file_path = os.path.join(folder, filename)
+            # Load and play the audio file
             pygame.mixer.music.load(file_path)
             pygame.mixer.music.play()
+            # Check if we should proceed to the next song after this one ends
+            self.check_for_music_end()
 
     def check_for_music_end(self):
-        if self.is_playing_sequence and not pygame.mixer.music.get_busy():
-            current_index = self.audio_listbox.curselection()[0]
-            next_index = (current_index + 1) % self.audio_listbox.size()
-            self.audio_listbox.selection_clear(0, tk.END)
-            self.audio_listbox.selection_set(next_index)
-            self.play_selected_audio(next_index)
-        self.root.after(1000, self.check_for_music_end)
+        if not pygame.mixer.music.get_busy():
+            if self.is_playing_sequence:
+                self.play_next()
+        else:
+            self.root.after(100, self.check_for_music_end)
+
+    def play_previous(self):
+        if self.audio_treeview.get_children():
+            prev_index = (self.current_audio_index - 1) % len(self.audio_treeview.get_children())
+            self.audio_treeview.selection_set(self.audio_treeview.get_children()[prev_index])
+            self.current_audio_index = prev_index
+            self.play_audio()
 
     def play_next(self):
-        if self.audio_listbox.size() > 0:
-            current_index = self.audio_listbox.curselection()[0] if self.audio_listbox.curselection() else -1
-            next_index = (current_index + 1) % self.audio_listbox.size()
-            self.audio_listbox.selection_clear(0, tk.END)
-            self.audio_listbox.selection_set(next_index)
-            self.play_selected_audio(next_index)
+        if self.audio_treeview.get_children():
+            next_index = (self.current_audio_index + 1) % len(self.audio_treeview.get_children())
+            self.audio_treeview.selection_set(self.audio_treeview.get_children()[next_index])
+            self.current_audio_index = next_index
+            self.play_audio()
 
     def stop_audio(self):
         pygame.mixer.music.stop()
