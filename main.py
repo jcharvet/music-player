@@ -75,12 +75,12 @@ class AudioPlayer:
         self.setup_controls()
         self.load_saved_folders()
 
-        # Existing initialization...
-        self.visualization = Visualization(self)
+        # Initialize Visualization with a callback function
+        self.visualization = Visualization(self, stop_callback=self.on_visualization_stop)
         self.video_player = VideoPlayer(self)
 
         # Initialize the flag to track visualization state
-        self.visualization_active = False  # Add this line
+        self.visualization_active = False
 
     def setup_labels(self):
         self.folder_label = tk.Label(self.root, text="No folder selected")
@@ -187,15 +187,19 @@ class AudioPlayer:
             self.play_audio()
 
     def play_next(self):
-        if self.audio_treeview.get_children():
+        if self.current_audio_index is not None and self.audio_treeview.get_children():
             next_index = (self.current_audio_index + 1) % len(self.audio_treeview.get_children())
             self.audio_treeview.selection_set(self.audio_treeview.get_children()[next_index])
             self.current_audio_index = next_index
             self.play_audio()
+        else:
+            # If there's no current track, do nothing or reset to the first track
+            pass  # or you can reset self.current_audio_index to 0 or another default value
 
     def stop_audio(self):
         pygame.mixer.music.stop()
         self.is_playing_sequence = False
+        self.current_audio_index = None  # Reset the current track index
 
     def adjust_volume(self, value):
         volume = int(value) / 100
@@ -217,11 +221,14 @@ class AudioPlayer:
     def toggle_visualization(self):
         if self.visualization_active:
             self.visualization.stop_visualization()
-            self.visualization_btn.config(text="Show Visualization")
         else:
             self.visualization.start_visualization()
-            self.visualization_btn.config(text="Hide Visualization")
-        self.visualization_active = not self.visualization_active
+        # No need to toggle the button text here, it's handled in the callback
+            
+    def on_visualization_stop(self):
+        # This method will be called when visualization stops
+        self.visualization_active = False
+        self.visualization_btn.config(text="Show Visualization")
 
     def show_video_player(self):
         # Implementation when VideoPlayer is available
