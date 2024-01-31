@@ -6,6 +6,55 @@ from mutagen.mp3 import MP3
 from mutagen.easyid3 import EasyID3
 
 class AudioPlayer:
+    """
+    A class representing an audio player application.
+
+    Attributes:
+        root (tk.Tk): The root window of the application.
+        settings_file (str): The path to the settings file.
+        folder_label (tk.Label): The label displaying the selected folder.
+        audio_treeview (ttk.Treeview): The treeview displaying the audio files.
+        prev_btn (tk.Button): The button for playing the previous audio.
+        play_btn (tk.Button): The button for playing the audio.
+        stop_btn (tk.Button): The button for stopping the audio.
+        next_btn (tk.Button): The button for playing the next audio.
+        volume_scale (tk.Scale): The scale for adjusting the volume.
+        current_audio_index (int): The index of the currently selected audio.
+        is_playing_sequence (bool): Indicates if the audio is playing in sequence.
+
+    Methods:
+        __init__(self, root): Initializes the AudioPlayer object.
+        setup_labels(self): Sets up the labels in the GUI.
+        setup_treeview(self): Sets up the treeview in the GUI.
+        setup_controls(self): Sets up the controls in the GUI.
+        select_folder(self): Opens a file dialog to select a folder.
+        load_audio_files(self, folder_path): Loads the audio files from the selected folder.
+        get_audio_metadata(self, file_path): Retrieves the metadata of an audio file.
+        on_double_click_treeview(self, event): Handles the double-click event on the treeview.
+        play_audio(self): Plays the selected audio.
+        check_for_music_end(self): Checks if the current audio has ended.
+        play_previous(self): Plays the previous audio.
+        play_next(self): Plays the next audio.
+        stop_audio(self): Stops the audio playback.
+        adjust_volume(self, value): Adjusts the volume of the audio.
+        save_folder(self, folder_path): Saves the selected folder to the settings file.
+        load_saved_folders(self): Loads the previously saved folders from the settings file.
+    """
+    def __init__(self, root):
+        self.root = root
+        root.title("Audio Player")
+        self.settings_file = "settings.txt"
+
+        # Initialize pygame for audio playback
+        pygame.init()
+        pygame.mixer.init()
+
+        # GUI Elements setup
+        self.setup_labels()
+        self.setup_treeview()
+        self.setup_controls()
+        self.load_saved_folders()
+class AudioPlayer:
     def __init__(self, root):
         self.root = root
         root.title("Audio Player")
