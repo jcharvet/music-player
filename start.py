@@ -23,7 +23,7 @@ def run_main():
     subprocess.check_call([sys.executable, "main.py"])
 
 # List of required packages
-required_packages = ["pygame", "tk", "mutagen"]
+required_packages = ["pygame", "tk", "mutagen", "pygame", "pyaudio", "numpy"]
 
 # Check and install each package
 for package in required_packages:
