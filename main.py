@@ -5,6 +5,8 @@ from tkinter import filedialog, messagebox, ttk
 import pygame
 from mutagen.mp3 import MP3
 from mutagen.easyid3 import EasyID3
+import threading
+import time
 
 from visualization import Visualization
 from video_player import VideoPlayer
@@ -70,6 +72,7 @@ class AudioPlayer:
         pygame.mixer.init()
 
         # GUI Elements setup
+        self.setup_menus()  # Setup the menu bar
         self.setup_labels()
         self.setup_treeview()
         self.setup_controls()
@@ -81,6 +84,20 @@ class AudioPlayer:
 
         # Initialize the flag to track visualization state
         self.visualization_active = False
+
+    def setup_menus(self):
+        # Create the menu bar
+        self.menu_bar = tk.Menu(self.root)
+        self.root.config(menu=self.menu_bar)
+
+        # Create a File menu
+        self.file_menu = tk.Menu(self.menu_bar, tearoff=0)
+        self.menu_bar.add_cascade(label="File", menu=self.file_menu)
+
+        # Add items to the File menu
+        self.file_menu.add_command(label="Add Folder", command=self.select_folder)
+        self.file_menu.add_separator()
+        self.file_menu.add_command(label="Exit", command=self.root.quit)
 
     def setup_labels(self):
         self.folder_label = tk.Label(self.root, text="No folder selected")
@@ -99,6 +116,14 @@ class AudioPlayer:
         # Initialize control_frame attribute
         self.control_frame = tk.Frame(self.root)
         self.control_frame.pack()
+
+        # Current track label
+        self.current_track_label = tk.Label(self.control_frame, text='Not Playing', anchor='w')
+        self.current_track_label.pack(fill='x')
+
+        # Initialize the track progress bar
+        self.track_progress = ttk.Progressbar(self.control_frame, orient="horizontal", length=100, mode="determinate")
+        self.track_progress.pack(fill='x')
 
         self.prev_btn = tk.Button(self.control_frame, text="Previous", command=self.play_previous)
         self.prev_btn.pack(side=tk.LEFT)
@@ -172,6 +197,33 @@ class AudioPlayer:
             pygame.mixer.music.play()
             # Check if we should proceed to the next song after this one ends
             self.check_for_music_end()
+
+            # Use mutagen to get the track length
+            audio = MP3(file_path)
+            track_length = audio.info.length
+
+            # Update track label with the new track name
+            self.current_track_label.config(text='Now Playing: ' + filename)
+
+            # Configure the track progress bar for the new track
+            self.track_progress.config(maximum=track_length, value=0)
+
+            # Start updating the progress bar
+            self.update_progress()
+
+    def update_progress(self):
+        if pygame.mixer.music.get_busy():
+            current_pos = pygame.mixer.music.get_pos() / 1000.0
+            self.track_progress['value'] = current_pos
+            self.root.after(1000, self.update_progress)  # Schedule next update
+        else:
+            self.track_progress['value'] = 0
+
+    def on_scale_move(self, val):
+        if pygame.mixer.music.get_busy():
+            # Seek to the new position if the user moves the progress bar
+            pygame.mixer.music.rewind()
+            pygame.mixer.music.set_pos(float(val))
 
     def check_for_music_end(self):
         if not pygame.mixer.music.get_busy():
