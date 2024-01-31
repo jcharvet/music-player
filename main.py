@@ -1,9 +1,63 @@
+# main.py
 import os
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 import pygame
 from mutagen.mp3 import MP3
 from mutagen.easyid3 import EasyID3
+
+from visualization import Visualization
+from video_player import VideoPlayer
+
+class AudioPlayer:
+    """
+    A class representing an audio player application.
+
+    Attributes:
+        root (tk.Tk): The root window of the application.
+        settings_file (str): The path to the settings file.
+        folder_label (tk.Label): The label displaying the selected folder.
+        audio_treeview (ttk.Treeview): The treeview displaying the audio files.
+        prev_btn (tk.Button): The button for playing the previous audio.
+        play_btn (tk.Button): The button for playing the audio.
+        stop_btn (tk.Button): The button for stopping the audio.
+        next_btn (tk.Button): The button for playing the next audio.
+        volume_scale (tk.Scale): The scale for adjusting the volume.
+        current_audio_index (int): The index of the currently selected audio.
+        is_playing_sequence (bool): Indicates if the audio is playing in sequence.
+
+    Methods:
+        __init__(self, root): Initializes the AudioPlayer object.
+        setup_labels(self): Sets up the labels in the GUI.
+        setup_treeview(self): Sets up the treeview in the GUI.
+        setup_controls(self): Sets up the controls in the GUI.
+        select_folder(self): Opens a file dialog to select a folder.
+        load_audio_files(self, folder_path): Loads the audio files from the selected folder.
+        get_audio_metadata(self, file_path): Retrieves the metadata of an audio file.
+        on_double_click_treeview(self, event): Handles the double-click event on the treeview.
+        play_audio(self): Plays the selected audio.
+        check_for_music_end(self): Checks if the current audio has ended.
+        play_previous(self): Plays the previous audio.
+        play_next(self): Plays the next audio.
+        stop_audio(self): Stops the audio playback.
+        adjust_volume(self, value): Adjusts the volume of the audio.
+        save_folder(self, folder_path): Saves the selected folder to the settings file.
+        load_saved_folders(self): Loads the previously saved folders from the settings file.
+    """
+    def __init__(self, root):
+        self.root = root
+        root.title("Green Audio Player")
+        self.settings_file = "settings.txt"
+
+        # Initialize pygame for audio playback
+        pygame.init()
+        pygame.mixer.init()
+
+        # GUI Elements setup
+        self.setup_labels()
+        self.setup_treeview()
+        self.setup_controls()
+        self.load_saved_folders()
 
 class AudioPlayer:
     def __init__(self, root):
@@ -21,6 +75,13 @@ class AudioPlayer:
         self.setup_controls()
         self.load_saved_folders()
 
+        # Initialize Visualization with a callback function
+        self.visualization = Visualization(self, stop_callback=self.on_visualization_stop)
+        self.video_player = VideoPlayer(self)
+
+        # Initialize the flag to track visualization state
+        self.visualization_active = False
+
     def setup_labels(self):
         self.folder_label = tk.Label(self.root, text="No folder selected")
         self.folder_label.pack()
@@ -35,24 +96,29 @@ class AudioPlayer:
         self.audio_treeview.bind('<Double-1>', self.on_double_click_treeview)
 
     def setup_controls(self):
-        control_frame = tk.Frame(self.root)
-        control_frame.pack()
+        # Initialize control_frame attribute
+        self.control_frame = tk.Frame(self.root)
+        self.control_frame.pack()
 
-        self.prev_btn = tk.Button(control_frame, text="Previous", command=self.play_previous)
+        self.prev_btn = tk.Button(self.control_frame, text="Previous", command=self.play_previous)
         self.prev_btn.pack(side=tk.LEFT)
 
-        self.play_btn = tk.Button(control_frame, text="Play", command=self.play_audio)
+        self.play_btn = tk.Button(self.control_frame, text="Play", command=self.play_audio)
         self.play_btn.pack(side=tk.LEFT)
 
-        self.stop_btn = tk.Button(control_frame, text="Stop", command=self.stop_audio)
+        self.stop_btn = tk.Button(self.control_frame, text="Stop", command=self.stop_audio)
         self.stop_btn.pack(side=tk.LEFT)
 
-        self.next_btn = tk.Button(control_frame, text="Next", command=self.play_next)
+        self.next_btn = tk.Button(self.control_frame, text="Next", command=self.play_next)
         self.next_btn.pack(side=tk.LEFT)
 
-        self.volume_scale = tk.Scale(self.root, from_=0, to=100, orient=tk.HORIZONTAL, command=self.adjust_volume)
+        self.volume_scale = tk.Scale(self.control_frame, from_=0, to=100, orient=tk.HORIZONTAL, command=self.adjust_volume)
         self.volume_scale.set(20)
-        self.volume_scale.pack()    
+        self.volume_scale.pack(side=tk.LEFT)
+
+        # Button to toggle visualization
+        self.visualization_btn = tk.Button(self.control_frame, text="Show Visualization", command=self.toggle_visualization)
+        self.visualization_btn.pack(side=tk.LEFT)
 
     def select_folder(self):
         folder_path = filedialog.askdirectory(initialdir=os.path.expanduser("~/Desktop"))
@@ -109,8 +175,7 @@ class AudioPlayer:
 
     def check_for_music_end(self):
         if not pygame.mixer.music.get_busy():
-            if self.is_playing_sequence:
-                self.play_next()
+            self.play_next()  # Automatically play the next track
         else:
             self.root.after(100, self.check_for_music_end)
 
@@ -122,15 +187,19 @@ class AudioPlayer:
             self.play_audio()
 
     def play_next(self):
-        if self.audio_treeview.get_children():
+        if self.current_audio_index is not None and self.audio_treeview.get_children():
             next_index = (self.current_audio_index + 1) % len(self.audio_treeview.get_children())
             self.audio_treeview.selection_set(self.audio_treeview.get_children()[next_index])
             self.current_audio_index = next_index
             self.play_audio()
+        else:
+            # If there's no current track, do nothing or reset to the first track
+            pass  # or you can reset self.current_audio_index to 0 or another default value
 
     def stop_audio(self):
         pygame.mixer.music.stop()
         self.is_playing_sequence = False
+        self.current_audio_index = None  # Reset the current track index
 
     def adjust_volume(self, value):
         volume = int(value) / 100
@@ -148,6 +217,26 @@ class AudioPlayer:
                     last_folder = folders[-1].strip()
                     self.folder_label.config(text=last_folder)
                     self.load_audio_files(last_folder)
+
+    def toggle_visualization(self):
+        if self.visualization_active:
+            self.visualization.stop_visualization()
+        else:
+            self.visualization.start_visualization()
+        # No need to toggle the button text here, it's handled in the callback
+            
+    def on_visualization_stop(self):
+        # This method will be called when visualization stops
+        self.visualization_active = False
+        self.visualization_btn.config(text="Show Visualization")
+
+    def show_video_player(self):
+        # Implementation when VideoPlayer is available
+        print("Video player shown")  # Replace with actual GUI code
+
+    def hide_video_player(self):
+        # Implementation when VideoPlayer is available
+        print("Video player hidden")  # Replace with actual GUI code
 
 root = tk.Tk()
 app = AudioPlayer(root)
