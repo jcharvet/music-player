@@ -6,7 +6,7 @@ import pygame
 class AudioPlayer:
     def __init__(self, root):
         self.root = root
-        root.title("Green Audio Player")
+        root.title("Audio Player")
         self.settings_file = "settings.txt"
 
         # Initialize pygame for audio playback
@@ -22,7 +22,7 @@ class AudioPlayer:
 
         self.audio_listbox = tk.Listbox(root, width=50, height=20)
         self.audio_listbox.pack()
-        self.audio_listbox.bind('<Double-1>', self.on_double_click)  # Bind double-click event
+        self.audio_listbox.bind('<Double-1>', self.on_double_click)
 
         self.play_btn = tk.Button(root, text="Play", command=self.play_audio)
         self.play_btn.pack()
@@ -31,10 +31,11 @@ class AudioPlayer:
         self.stop_btn.pack()
 
         self.volume_scale = tk.Scale(root, from_=0, to=100, orient=tk.HORIZONTAL, command=self.adjust_volume)
-        self.volume_scale.set(100)
+        self.volume_scale.set(20)  # Set default volume to 20%
         self.volume_scale.pack()
 
         self.current_audio = None
+        self.is_playing_sequence = False
 
         self.load_saved_folders()
 
@@ -52,22 +53,33 @@ class AudioPlayer:
                 self.audio_listbox.insert(tk.END, file)
 
     def on_double_click(self, event):
+        self.is_playing_sequence = True
         self.play_audio()
 
     def play_audio(self):
         if self.audio_listbox.curselection():
             selected_index = self.audio_listbox.curselection()[0]
-            selected_file = self.audio_listbox.get(selected_index)
-            folder = self.folder_label.cget("text")
-            file_path = os.path.join(folder, selected_file)
+            self.play_selected_audio(selected_index)
+            self.schedule_next_track(selected_index)
 
-            if self.current_audio != file_path:
-                self.current_audio = file_path
-                pygame.mixer.music.load(file_path)
-                pygame.mixer.music.play()
+    def play_selected_audio(self, index):
+        selected_file = self.audio_listbox.get(index)
+        folder = self.folder_label.cget("text")
+        file_path = os.path.join(folder, selected_file)
+
+        if self.current_audio != file_path:
+            self.current_audio = file_path
+            pygame.mixer.music.load(file_path)
+            pygame.mixer.music.play()
+
+    def schedule_next_track(self, current_index):
+        if self.is_playing_sequence:
+            next_index = (current_index + 1) % self.audio_listbox.size()
+            self.root.after(int(pygame.mixer.music.get_length() * 1000), lambda: self.play_selected_audio(next_index))
 
     def stop_audio(self):
         pygame.mixer.music.stop()
+        self.is_playing_sequence = False
 
     def adjust_volume(self, value):
         volume = int(value) / 100
