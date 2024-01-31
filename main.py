@@ -24,11 +24,18 @@ class AudioPlayer:
         self.audio_listbox.pack()
         self.audio_listbox.bind('<Double-1>', self.on_double_click)
 
-        self.play_btn = tk.Button(root, text="Play", command=self.play_audio)
-        self.play_btn.pack()
+        # Playback control frame
+        control_frame = tk.Frame(root)
+        control_frame.pack()
 
-        self.stop_btn = tk.Button(root, text="Stop", command=self.stop_audio)
-        self.stop_btn.pack()
+        self.play_btn = tk.Button(control_frame, text="Play", command=self.play_audio)
+        self.play_btn.pack(side=tk.LEFT)
+
+        self.stop_btn = tk.Button(control_frame, text="Stop", command=self.stop_audio)
+        self.stop_btn.pack(side=tk.LEFT)
+
+        self.next_btn = tk.Button(control_frame, text="Next", command=self.play_next)
+        self.next_btn.pack(side=tk.LEFT)
 
         self.volume_scale = tk.Scale(root, from_=0, to=100, orient=tk.HORIZONTAL, command=self.adjust_volume)
         self.volume_scale.set(20)  # Set default volume to 20%
@@ -38,6 +45,7 @@ class AudioPlayer:
         self.is_playing_sequence = False
 
         self.load_saved_folders()
+        self.check_for_music_end()
 
     def select_folder(self):
         folder_path = filedialog.askdirectory(initialdir=os.path.expanduser("~/Desktop"))
@@ -60,7 +68,6 @@ class AudioPlayer:
         if self.audio_listbox.curselection():
             selected_index = self.audio_listbox.curselection()[0]
             self.play_selected_audio(selected_index)
-            self.schedule_next_track(selected_index)
 
     def play_selected_audio(self, index):
         selected_file = self.audio_listbox.get(index)
@@ -72,10 +79,22 @@ class AudioPlayer:
             pygame.mixer.music.load(file_path)
             pygame.mixer.music.play()
 
-    def schedule_next_track(self, current_index):
-        if self.is_playing_sequence:
+    def check_for_music_end(self):
+        if self.is_playing_sequence and not pygame.mixer.music.get_busy():
+            current_index = self.audio_listbox.curselection()[0]
             next_index = (current_index + 1) % self.audio_listbox.size()
-            self.root.after(int(pygame.mixer.music.get_length() * 1000), lambda: self.play_selected_audio(next_index))
+            self.audio_listbox.selection_clear(0, tk.END)
+            self.audio_listbox.selection_set(next_index)
+            self.play_selected_audio(next_index)
+        self.root.after(1000, self.check_for_music_end)
+
+    def play_next(self):
+        if self.audio_listbox.size() > 0:
+            current_index = self.audio_listbox.curselection()[0] if self.audio_listbox.curselection() else -1
+            next_index = (current_index + 1) % self.audio_listbox.size()
+            self.audio_listbox.selection_clear(0, tk.END)
+            self.audio_listbox.selection_set(next_index)
+            self.play_selected_audio(next_index)
 
     def stop_audio(self):
         pygame.mixer.music.stop()
