@@ -303,16 +303,26 @@ class AudioPlayer:
 
     def perform_sort(self, sort_by):
         all_tracks = [(self.audio_treeview.item(item, 'values'), item) for item in self.audio_treeview.get_children()]
-        if sort_by == "Artist":
-            sorted_tracks = sorted(all_tracks, key=lambda x: x[0][2])  # Sort by artist
-        elif sort_by == "Album":
-            sorted_tracks = sorted(all_tracks, key=lambda x: x[0][3])  # Sort by album
-        elif sort_by == "Title":
-            sorted_tracks = sorted(all_tracks, key=lambda x: x[0][1])  # Sort by title
 
-        # Rearrange items in the treeview
+        # Define sorted_tracks with a default value, such as the original order
+        sorted_tracks = all_tracks
+
+        if sort_by == "Artist":
+            sorted_tracks = sorted(all_tracks, key=lambda x: x[0][2])
+        elif sort_by == "Album":
+            sorted_tracks = sorted(all_tracks, key=lambda x: x[0][3])
+        elif sort_by == "Genre":
+            sorted_tracks = sorted(all_tracks, key=lambda x: x[0][4])
+        elif sort_by == "Year":
+            sorted_tracks = sorted(all_tracks, key=lambda x: x[0][5])
+        elif sort_by == "Title":
+            sorted_tracks = sorted(all_tracks, key=lambda x: x[0][1])
+        # Continue with other sorting criteria if needed
+
+        # Now, iterate over the sorted_tracks and reinsert them into the Treeview
         for track in sorted_tracks:
             self.audio_treeview.move(track[1], '', 'end')
+
 
 root = tk.Tk()
 app = AudioPlayer(root)
