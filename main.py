@@ -1,7 +1,7 @@
 # main.py
 import os
 import tkinter as tk
-from tkinter import filedialog, messagebox, ttk
+from tkinter import filedialog, messagebox, ttk, Menu
 import pygame
 from mutagen.mp3 import MP3
 from mutagen.easyid3 import EasyID3
@@ -10,56 +10,8 @@ import time
 
 from visualization import Visualization
 from video_player import VideoPlayer
-
-class AudioPlayer:
-    """
-    A class representing an audio player application.
-
-    Attributes:
-        root (tk.Tk): The root window of the application.
-        settings_file (str): The path to the settings file.
-        folder_label (tk.Label): The label displaying the selected folder.
-        audio_treeview (ttk.Treeview): The treeview displaying the audio files.
-        prev_btn (tk.Button): The button for playing the previous audio.
-        play_btn (tk.Button): The button for playing the audio.
-        stop_btn (tk.Button): The button for stopping the audio.
-        next_btn (tk.Button): The button for playing the next audio.
-        volume_scale (tk.Scale): The scale for adjusting the volume.
-        current_audio_index (int): The index of the currently selected audio.
-        is_playing_sequence (bool): Indicates if the audio is playing in sequence.
-
-    Methods:
-        __init__(self, root): Initializes the AudioPlayer object.
-        setup_labels(self): Sets up the labels in the GUI.
-        setup_treeview(self): Sets up the treeview in the GUI.
-        setup_controls(self): Sets up the controls in the GUI.
-        select_folder(self): Opens a file dialog to select a folder.
-        load_audio_files(self, folder_path): Loads the audio files from the selected folder.
-        get_audio_metadata(self, file_path): Retrieves the metadata of an audio file.
-        on_double_click_treeview(self, event): Handles the double-click event on the treeview.
-        play_audio(self): Plays the selected audio.
-        check_for_music_end(self): Checks if the current audio has ended.
-        play_previous(self): Plays the previous audio.
-        play_next(self): Plays the next audio.
-        stop_audio(self): Stops the audio playback.
-        adjust_volume(self, value): Adjusts the volume of the audio.
-        save_folder(self, folder_path): Saves the selected folder to the settings file.
-        load_saved_folders(self): Loads the previously saved folders from the settings file.
-    """
-    def __init__(self, root):
-        self.root = root
-        root.title("Green Audio Player")
-        self.settings_file = "settings.txt"
-
-        # Initialize pygame for audio playback
-        pygame.init()
-        pygame.mixer.init()
-
-        # GUI Elements setup
-        self.setup_labels()
-        self.setup_treeview()
-        self.setup_controls()
-        self.load_saved_folders()
+from track import Track
+from search import SearchAndSort
 
 class AudioPlayer:
     def __init__(self, root):
@@ -77,6 +29,9 @@ class AudioPlayer:
         self.setup_treeview()
         self.setup_controls()
         self.load_saved_folders()
+        self.setup_search()  # Set up the search bar
+        self.setup_sorting() # Set up the sorting options
+        self.setup_search_and_sorting()  # Set up the search and sorting options
 
         # Initialize Visualization with a callback function
         self.visualization = Visualization(self, stop_callback=self.on_visualization_stop)
@@ -104,10 +59,10 @@ class AudioPlayer:
         self.folder_label.pack()
 
     def setup_treeview(self):
-        columns = ('Filename', 'Title', 'Artist', 'Album', 'Length', 'Sample Rate', 'Bit Depth', 'Bitrate', 'File Type')
+        columns = ('Filename', 'Title', 'Artist', 'Album', 'Length', 'Sample Rate', 'Bit Depth', 'Bitrate', 'File Type', 'Genre', 'Year')
         self.audio_treeview = ttk.Treeview(self.root, columns=columns, show='headings')
         for col in columns:
-            self.audio_treeview.heading(col, text=col)
+            self.audio_treeview.heading(col, text=col, anchor=tk.W)
             self.audio_treeview.column(col, width=100)
         self.audio_treeview.pack(expand=True, fill='both')
         self.audio_treeview.bind('<Double-1>', self.on_double_click_treeview)
@@ -157,8 +112,20 @@ class AudioPlayer:
         for file in os.listdir(folder_path):
             if file.lower().endswith('.mp3'):
                 file_path = os.path.join(folder_path, file)
-                audio_metadata = self.get_audio_metadata(file_path)
-                self.audio_treeview.insert('', 'end', values=audio_metadata)
+                track = Track(file_path)
+                self.audio_treeview.insert('', 'end', values=(
+                    os.path.basename(file_path),
+                    track.title,
+                    track.artist,
+                    track.album,
+                    str(int(track.length)),  # Convert to int for a cleaner look, if desired
+                    track.sample_rate,  # Assuming you have this attribute
+                    'N/A',    # Assuming you have this attribute
+                    track.bitrate,      # Assuming you have this attribute
+                    track.file_type,    # Assuming you have this attribute
+                    track.genre,
+                    track.year
+                ))
 
     def get_audio_metadata(self, file_path):
         try:
@@ -289,6 +256,73 @@ class AudioPlayer:
     def hide_video_player(self):
         # Implementation when VideoPlayer is available
         print("Video player hidden")  # Replace with actual GUI code
+
+    def setup_search_and_sorting(self):
+        # Search Bar
+        self.search_var = tk.StringVar()
+        search_entry = tk.Entry(self.root, textvariable=self.search_var)
+        search_entry.pack(side=tk.TOP, fill=tk.X)
+        
+        # Assuming you have a button or entry for search
+        search_button = tk.Button(self.root, text="Search", command=self.perform_search)
+        search_button.pack(side=tk.TOP)
+
+        # Sort OptionMenu
+        self.sort_var = tk.StringVar(value="Sort By")
+        sort_options = ttk.OptionMenu(self.root, self.sort_var, "Sort By", "Artist", "Album", "Genre", "Year", "Title", command=self.perform_sort)
+        sort_options.pack(side=tk.TOP)
+
+        self.search_and_sort = SearchAndSort(self.audio_treeview)
+
+    def setup_search(self):
+        # Create a search bar
+        self.search_var = tk.StringVar()
+        self.search_entry = tk.Entry(self.control_frame, textvariable=self.search_var)
+        self.search_entry.pack()
+        self.search_button = tk.Button(self.control_frame, text="Search", command=self.perform_search)
+        self.search_button.pack()
+
+    def perform_search(self):
+        query = self.search_var.get().lower()
+        for item in self.audio_treeview.get_children():
+            track = self.audio_treeview.item(item, 'values')
+            # Check if query is in any of the track's fields
+            if query in track[1].lower() or query in track[2].lower() or query in track[3].lower():
+                self.audio_treeview.item(item, tags='match')
+            else:
+                self.audio_treeview.item(item, tags='')
+
+        # Highlight or show only matching items
+        self.audio_treeview.tag_configure('match', background='yellow')
+
+    def setup_sorting(self):
+        # Create a dropdown or buttons for sorting options
+        self.sort_var = tk.StringVar()
+        self.sort_options = tk.OptionMenu(self.control_frame, self.sort_var, "Artist", "Album", "Title", command=self.perform_sort)
+        self.sort_options.pack()
+
+    def perform_sort(self, sort_by):
+        all_tracks = [(self.audio_treeview.item(item, 'values'), item) for item in self.audio_treeview.get_children()]
+
+        # Define sorted_tracks with a default value, such as the original order
+        sorted_tracks = all_tracks
+
+        if sort_by == "Artist":
+            sorted_tracks = sorted(all_tracks, key=lambda x: x[0][2])
+        elif sort_by == "Album":
+            sorted_tracks = sorted(all_tracks, key=lambda x: x[0][3])
+        elif sort_by == "Genre":
+            sorted_tracks = sorted(all_tracks, key=lambda x: x[0][4])
+        elif sort_by == "Year":
+            sorted_tracks = sorted(all_tracks, key=lambda x: x[0][5])
+        elif sort_by == "Title":
+            sorted_tracks = sorted(all_tracks, key=lambda x: x[0][1])
+        # Continue with other sorting criteria if needed
+
+        # Now, iterate over the sorted_tracks and reinsert them into the Treeview
+        for track in sorted_tracks:
+            self.audio_treeview.move(track[1], '', 'end')
+
 
 root = tk.Tk()
 app = AudioPlayer(root)
