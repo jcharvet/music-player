@@ -154,9 +154,9 @@ class AudioPlayer:
 
     def on_double_click_treeview(self, event):
         # Get the item that was double-clicked
-        selected_item = self.audio_treeview.selection()[0]
+        item_id  = self.audio_treeview.selection()[0]
         # Set the current audio index to the index of the selected item
-        self.current_audio_index = self.audio_treeview.index(selected_item)
+        self.current_audio_index = item_id 
         # Play the selected audio
         self.play_audio()
 
@@ -165,10 +165,9 @@ class AudioPlayer:
             messagebox.showerror("Error", "No track selected!")
             return
 
-        print(self.current_audio_index)
         # Get the item to play based on the current index
-        item_to_play = self.audio_treeview.get_children()[self.current_audio_index]
-        print(item_to_play)
+        selected_item = self.audio_treeview.index(self.current_audio_index)
+        item_to_play = self.audio_treeview.get_children()[selected_item]
         # Extract the filename from the item values
         filename = self.audio_treeview.item(item_to_play, 'values')[0]
         folder = self.folder_label.cget("text")
