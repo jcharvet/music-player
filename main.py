@@ -18,6 +18,7 @@ class AudioPlayer:
         self.root = root
         root.title("Audio Player")
         self.settings_file = "settings.txt"
+        self.current_audio_index = None  # Initialize the current audio index to None
 
         # Initialize pygame for audio playback
         pygame.init()
@@ -66,6 +67,14 @@ class AudioPlayer:
             self.audio_treeview.column(col, width=100)
         self.audio_treeview.pack(expand=True, fill='both')
         self.audio_treeview.bind('<Double-1>', self.on_double_click_treeview)
+        self.audio_treeview.bind('<<TreeviewSelect>>', self.on_track_select)
+
+    def on_track_select(self, event):
+        selected_items = self.audio_treeview.selection()
+        if selected_items:  # If there's at least one selected item
+            self.current_audio_index = selected_items[0]  # Assuming the index or ID is what you need
+        else:
+            self.current_audio_index = None
 
     def setup_controls(self):
         # Initialize control_frame attribute
@@ -152,31 +161,36 @@ class AudioPlayer:
         self.play_audio()
 
     def play_audio(self):
-        if self.current_audio_index is not None:
-            # Get the item to play based on the current index
-            item_to_play = self.audio_treeview.get_children()[self.current_audio_index]
-            # Extract the filename from the item values
-            filename = self.audio_treeview.item(item_to_play, 'values')[0]
-            folder = self.folder_label.cget("text")
-            file_path = os.path.join(folder, filename)
-            # Load and play the audio file
-            pygame.mixer.music.load(file_path)
-            pygame.mixer.music.play()
-            # Check if we should proceed to the next song after this one ends
-            self.check_for_music_end()
+        if not self.current_audio_index:
+            messagebox.showerror("Error", "No track selected!")
+            return
 
-            # Use mutagen to get the track length
-            audio = MP3(file_path)
-            track_length = audio.info.length
+        print(self.current_audio_index)
+        # Get the item to play based on the current index
+        item_to_play = self.audio_treeview.get_children()[self.current_audio_index]
+        print(item_to_play)
+        # Extract the filename from the item values
+        filename = self.audio_treeview.item(item_to_play, 'values')[0]
+        folder = self.folder_label.cget("text")
+        file_path = os.path.join(folder, filename)
+        # Load and play the audio file
+        pygame.mixer.music.load(file_path)
+        pygame.mixer.music.play()
+        # Check if we should proceed to the next song after this one ends
+        self.check_for_music_end()
 
-            # Update track label with the new track name
-            self.current_track_label.config(text='Now Playing: ' + filename)
+        # Use mutagen to get the track length
+        audio = MP3(file_path)
+        track_length = audio.info.length
 
-            # Configure the track progress bar for the new track
-            self.track_progress.config(maximum=track_length, value=0)
+        # Update track label with the new track name
+        self.current_track_label.config(text='Now Playing: ' + filename)
 
-            # Start updating the progress bar
-            self.update_progress()
+        # Configure the track progress bar for the new track
+        self.track_progress.config(maximum=track_length, value=0)
+
+        # Start updating the progress bar
+        self.update_progress()
 
     def update_progress(self):
         if pygame.mixer.music.get_busy():

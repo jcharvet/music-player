@@ -2,3 +2,4 @@ settings.txt
 __pycache__/*
 __pycache__/
 *.pyc
+ui\__pycache__/*
