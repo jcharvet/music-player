@@ -1,11 +1,15 @@
 # main.py
+import requests
 import os
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk, Menu
 import pygame
 from mutagen.mp3 import MP3
 from mutagen.easyid3 import EasyID3
+from mutagen.id3 import ID3, APIC
+from PIL import Image, ImageTk
 import threading
+import io
 import time
 
 from visualization import Visualization
@@ -60,14 +64,45 @@ class AudioPlayer:
         self.folder_label.pack()
 
     def setup_treeview(self):
-        columns = ('Filename', 'Title', 'Artist', 'Album', 'Length', 'Sample Rate', 'Bit Depth', 'Bitrate', 'File Type', 'Genre', 'Year')
-        self.audio_treeview = ttk.Treeview(self.root, columns=columns, show='headings')
-        for col in columns:
+        columns = ('Filename','Title', 'Artist', 'Album', 'Length', 'Sample Rate', 'Bit Depth', 'Bitrate', 'File Type', 'Genre', 'Year')  # 'Album Art' removed
+        self.audio_treeview = ttk.Treeview(self.root, columns=columns)  # show parameter removed to display '#0' column
+
+        # Set the '#0' column for images
+        self.audio_treeview.column('#0', width=50, anchor='center')
+        self.audio_treeview.heading('#0', text='Album Art')  # This sets the heading for the '#0' column
+
+        for col in columns:  # Now your columns start from 'Title'
             self.audio_treeview.heading(col, text=col, anchor=tk.W)
             self.audio_treeview.column(col, width=100)
+
+        # Adjust column widths
+        self.audio_treeview.column('Title', width=200)
+        self.audio_treeview.column('Artist', width=150)
+
+        # Adjust column alignments
+        self.audio_treeview.column('Length', anchor='e')
+        self.audio_treeview.column('Bitrate', anchor='e')
+
+        # Style configuration
+        style = ttk.Style()
+        style.configure('Treeview', rowheight=50)  # This is not standard and may not work as expected
+        style.configure('Treeview.Heading', font=('Helvetica', 10, 'bold'))
+        style.map('Treeview', background=[('selected', 'blue')])  # Change selection color
+
+        # Make sure to pack the treeview with a scrollbar
+        treeview_scrollbar = ttk.Scrollbar(self.root, orient='vertical', command=self.audio_treeview.yview)
+        self.audio_treeview.configure(yscrollcommand=treeview_scrollbar.set)
+        treeview_scrollbar.pack(side='right', fill='y')
         self.audio_treeview.pack(expand=True, fill='both')
+
+
+
         self.audio_treeview.bind('<Double-1>', self.on_double_click_treeview)
         self.audio_treeview.bind('<<TreeviewSelect>>', self.on_track_select)
+
+        self.audio_treeview.pack(expand=True, fill='both')
+
+
 
     def on_track_select(self, event):
         selected_items = self.audio_treeview.selection()
@@ -118,18 +153,28 @@ class AudioPlayer:
 
     def load_audio_files(self, folder_path):
         self.audio_treeview.delete(*self.audio_treeview.get_children())
+
+        # Initialize or clear the list to store image references
+        self.album_art_references = []
+
         for file in os.listdir(folder_path):
             if file.lower().endswith('.mp3'):
                 file_path = os.path.join(folder_path, file)
                 track = Track(file_path)
-                self.audio_treeview.insert('', 'end', values=(
+
+                # Extract the thumbnail image
+                thumbnail = self.extract_album_art_as_thumbnail(file_path)
+                self.album_art_references.append(thumbnail)  # Keep a reference
+
+                # Insert the track into the Treeview with the thumbnail
+                self.audio_treeview.insert('', 'end', text='', image=thumbnail, values=(
                     os.path.basename(file_path),
                     track.title,
                     track.artist,
                     track.album,
                     str(int(track.length)),  # Convert to int for a cleaner look, if desired
                     track.sample_rate,  # Assuming you have this attribute
-                    'N/A',    # Assuming you have this attribute
+                    'N/A',    # Placeholder for any missing information
                     track.bitrate,      # Assuming you have this attribute
                     track.file_type,    # Assuming you have this attribute
                     track.genre,
@@ -190,6 +235,9 @@ class AudioPlayer:
 
         # Start updating the progress bar
         self.update_progress()
+
+        self.display_album_art(file_path)
+        # self.display_lyrics(lyrics_source)  # Replace lyrics_source with the actual source of lyrics
 
     def update_progress(self):
         if pygame.mixer.music.get_busy():
@@ -336,6 +384,47 @@ class AudioPlayer:
         for track in sorted_tracks:
             self.audio_treeview.move(track[1], '', 'end')
 
+    def extract_album_art_as_thumbnail(self, file_path, size=(50, 50)):
+        try:
+            audio = ID3(file_path)
+            for tag in audio.values():
+                if isinstance(tag, APIC):
+                    album_art_data = tag.data
+                    image = Image.open(io.BytesIO(album_art_data))
+                    image.thumbnail(size)
+                    photo = ImageTk.PhotoImage(image)
+                    return photo
+        except Exception as e:
+            print(f"Error processing {file_path}: {e}")
+        return None
+
+
+    def display_album_art(self, file_path):
+        # Use the extract_album_art_as_thumbnail method to get the photo
+        photo = self.extract_album_art_as_thumbnail(file_path)
+        if photo:
+            # Assuming self.album_art_label is defined elsewhere in your GUI setup code
+            if not hasattr(self, 'album_art_label'):
+                # Create the album_art_label if it doesn't exist
+                self.album_art_label = tk.Label(self.root)
+                self.album_art_label.pack(side="top", fill="both", expand=True)
+            # Update the UI component with the new image
+            self.album_art_label.config(image=photo)
+            self.album_art_label.image = photo  # Keep a reference
+
+    def display_lyrics(self, lyrics_source):
+        # Fetch and display lyrics
+        # If lyrics_source is a URL
+        response = requests.get(lyrics_source)
+        lyrics = response.text
+
+        # If lyrics_source is a local file path
+        with open(lyrics_source, 'r') as file:
+            lyrics = file.read()
+
+        # Update the lyrics UI component with the fetched lyrics
+        self.lyrics_text_widget.delete(1.0, tk.END)  # Clear any existing lyrics
+        self.lyrics_text_widget.insert(tk.END, lyrics)  # Insert the new lyrics
 
 root = tk.Tk()
 app = AudioPlayer(root)
